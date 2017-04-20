@@ -6,7 +6,7 @@ import re
 import socket
 import threading
 import sqlite3
-
+import select
 
 #server address
 _server_ip = "192.168.1.3"
@@ -17,6 +17,8 @@ _address_bind = _server_ip, _server_port
 #buffer size
 _recvbuffer = 1024
 _maxconnect = 1024
+
+
 '''
 # Set DB options and create tables
 #connection on database
@@ -47,13 +49,19 @@ class talkToClient(threading.Thread):
 		
 	def run(self):
 		while self.running:
-			#get response
-			response = self.sock.recv(_recvbuffer).decode('utf-8')
-			# do action
-			response_operation(response)
+			inputready,outputready,exceptready = select.select ([self.sock],[self.sock],[])
+			for input_item in inputready:
+				#get response
+				response = self.sock.recv(_recvbuffer).decode('utf-8')
+				if response:
+					# do action
+					self.response_operation(response)
+				else: break
+			time.sleep(0)
 			
 		self.sock.close()
-		self.kill()
+		print("Client disconnect")
+		
 	def response_operation(self,_response):
 		'''
 			COMMAND FROM CLIENT and ACTION on this command:
@@ -69,17 +77,23 @@ class talkToClient(threading.Thread):
 					desription: close connection
 					action: close connection
 		'''
+		
+		global thread_array
+		
 		if 'LIST' in _response:
+			print("Client ", self.addr[0], _response)
 			#get ip-list
-			list_user = thread_array.key()
+			list_user = list(thread_array.keys())
 			#remove yourself ip
 			list_user.remove(self.addr[0])
 			#create request string "xx.xx.xx.xx;xx.xx.xx.xx"
 			list_user = str(';'.join(list_user))
+			print(list_user)
 			self.send(list_user)
 			
 		
 		elif 'CREATE'  in _response:
+			print("Client ", self.addr[0], _response)
 			# get ip clients
 			command,ip_cl1,_address_connClient = _response.split(' ')	#from command string CREATE IP IP:PORT
 			
@@ -88,11 +102,13 @@ class talkToClient(threading.Thread):
 			req_string = "SESSION "+str(_address_connClient)
 			# send to client about other client want start session
 			client_thread.send(req_string)
-		elif 'BUY' in _response:
+		elif 'BYE' in _response:
+			print("Client ", self.addr[0], _response)
 			self.kill()
 	
 	def send(self,_request):
 		self.sock.send(_request.encode('utf-8'))
+		print('Send///')
 		
 	def kill(self):
 		self.running = 0
@@ -107,8 +123,11 @@ class sendToClient(threading.Thread):
 		
 	def run(self):
 '''		
+global thread_array	
 	
 def main():
+	
+	global thread_array
 	
 	
 	#create socket for listener

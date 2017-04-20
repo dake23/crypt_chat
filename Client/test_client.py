@@ -5,7 +5,7 @@ import random
 import re
 import socket
 import threading
-
+import select
 
 _server_ip = "192.168.1.3"
 _server_port = 5544
@@ -88,16 +88,25 @@ def main():
 			self.sock.connect(_address_server)
 			
 			while self.running:
-				response = self.sock.recv(_recvbuffer).decode('utf-8')
-				print(response)
+				inputready,outputready,exceptready = select.select ([self.sock],[self.sock],[])
+				for input_item in inputready:
+					response = self.sock.recv(_recvbuffer).decode('utf-8')
+					if response:
+						print(response)
+					else: break
+				time.sleep(0)
+				
+			self.sock.close()
+			print('Close')
+			
 			
 		def send(self,_req):
 			self.sock.send(_req.encode('utf-8'))
 			
 		def kill(self):
-			self.send('BYE')
-			self.sock.close()
+			self.send(str('BYE'))
 			self.running = 0
+			
 
 	class Text_Input(threading.Thread):
 		def __init__(self):
@@ -153,4 +162,4 @@ def main():
 	'''
 	
 main()
-input()
+input('Enter for close')
