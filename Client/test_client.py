@@ -7,7 +7,7 @@ import socket
 import threading
 import select
 
-_server_ip = "192.168.1.3"
+_server_ip = "10.0.0.108"
 _server_port = 5544
 _address_server = _server_ip, _server_port
 
@@ -77,6 +77,24 @@ class Text_Input(threading.Thread):
 '''
 
 def main():
+
+	class p2pchat(threading.Thread):
+		'''
+			mode:
+				0 - Server
+				1 - Client
+		'''
+		def __init__(self,mode,serveraddr,):
+			threading.Thread.__init__(self)
+			self.addr = addr
+			self.sock = clientSock
+			self.mode = mode
+			self.running = 1
+		def run(self):
+			#client conn
+			if mode:
+				
+				
 	class listenServer(threading.Thread):
 		def __init__(self):
 			threading.Thread.__init__(self)
@@ -92,13 +110,23 @@ def main():
 				for input_item in inputready:
 					response = self.sock.recv(_recvbuffer).decode('utf-8')
 					if response:
-						print(response)
+						self.o_response(response)
 					else: break
 				time.sleep(0)
 				
 			self.sock.close()
 			print('Close')
 			
+		def o_response(self,_response):
+			
+			if 'LIST' in _response:
+				_res_mas = _response.split(' ')
+				_user_list = _res_mas[1].split(';')
+				
+				print('User list ',_user_list,"\n")
+			elif 'SESSION' in _response:
+				_res_mas = _response.split(' ')
+				print('User ',_res_mas[1], 'want start chat. Address to connect: ',_res_mas[2])
 			
 		def send(self,_req):
 			self.sock.send(_req.encode('utf-8'))
@@ -115,17 +143,18 @@ def main():
 		def run(self):
 			while self.running == True:
 				text = input('INPUT: ')
-				if 'exit' in text:
-					self.kill()
-					
-				elif 'Exit' in text:
+				if 'exit' in text or 'Exit' in text:
 					self.kill()
 					
 				elif 'LIST' in text:
 					req_str = str(text)
 					talkToServer.send(req_str)
+		
+				elif 'CREATE' in text:
+					req_str = str(text)
+					talkToServer.send(req_str)
 					
-				time.sleep(0)
+				time.sleep(1)
 		def kill(self):
 			self.running = 0
 			talkToServer.kill()
@@ -134,9 +163,12 @@ def main():
 		
 		
 		
-		
+	login = input('INPUT login: ')	
+	
 	talkToServer = listenServer()
 	talkToServer.start()
+	time.sleep(1)
+	talkToServer.send('LOGIN '+str(login))
 	input_message = Text_Input()
 	input_message.start()
 		
@@ -162,4 +194,4 @@ def main():
 	'''
 	
 main()
-input('Enter for close')
+#input('Enter for close')

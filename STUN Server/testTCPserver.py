@@ -9,7 +9,7 @@ import sqlite3
 import select
 
 #server address
-_server_ip = "192.168.1.3"
+_server_ip = "10.0.0.108"
 #server port
 _server_port = 5544
 #address for bind port
@@ -45,6 +45,7 @@ class talkToClient(threading.Thread):
 		self.sock = clientSock
 		self.addr = addr
 		self.running = 1
+		self.login = ""
 		threading.Thread.__init__(self)
 		
 	def run(self):
@@ -80,35 +81,45 @@ class talkToClient(threading.Thread):
 		
 		global thread_array
 		
-		if 'LIST' in _response:
+		if 'LOGIN' in _response:
+			_res_mas = _response.split(' ')
+			
+			self.login = _res_mas[1]
+			
+			thread_array[self.login] = self
+			print('Client ', _res_mas[1] , ' registration on system')
+			
+		
+		elif 'LIST' in _response:
 			print("Client ", self.addr[0], _response)
 			#get ip-list
 			list_user = list(thread_array.keys())
 			#remove yourself ip
-			list_user.remove(self.addr[0])
+			#list_user.remove(self.addr[0])
 			#create request string "xx.xx.xx.xx;xx.xx.xx.xx"
 			list_user = str(';'.join(list_user))
-			print(list_user)
-			self.send(list_user)
+			self.send('LIST '+list_user)
 			
 		
 		elif 'CREATE'  in _response:
 			print("Client ", self.addr[0], _response)
 			# get ip clients
-			command,ip_cl1,_address_connClient = _response.split(' ')	#from command string CREATE IP IP:PORT
+			command,login_c,_address_connClient = _response.split(' ')	#from command string CREATE IP IP:PORT
 			
 			#get self thread clients
-			client_thread = thread_array[ip_cl1]
-			req_string = "SESSION "+str(_address_connClient)
+			client_thread = thread_array[login_c]
+			req_string = "SESSION "+login_c+' '+str(_address_connClient)
 			# send to client about other client want start session
 			client_thread.send(req_string)
 		elif 'BYE' in _response:
 			print("Client ", self.addr[0], _response)
+			#delete client out thread_list
+			thread_array.pop(self.login)
 			self.kill()
 	
 	def send(self,_request):
 		self.sock.send(_request.encode('utf-8'))
-		print('Send///')
+		print('Send to ',self.login, _request)
 		
 	def kill(self):
 		self.running = 0
@@ -147,7 +158,8 @@ def main():
 		print(":NEW CONNECTION IP ", str(addr))
 		
 		
-		thread_array[addr[0]] = talkToClient(conn,addr).start()
+		#thread_array[addr[0]] = talkToClient(conn,addr).start()
+		talkToClient(conn,addr).start()
 		
 		#get current count threads
 		count_thread = threading.active_count()
