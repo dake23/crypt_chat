@@ -7,14 +7,19 @@ import socket
 import threading
 import select
 
-_server_ip = "10.0.0.108"
+_server_ip = "192.168.43.65"
 _server_port = 5544
 _address_server = _server_ip, _server_port
 
 _recvbuffer = 1024
 
+_yourself_ip = "192.168.43.65"
+_serverChat_port = int(random.uniform(5545,5550))
+_address_bind = _yourself_ip,_serverChat_port
+_maxconnect = 2
 
 global talkToServer
+global serverChat
 
 '''
 class sendServer(threading.Thread):
@@ -78,23 +83,84 @@ class Text_Input(threading.Thread):
 
 def main():
 
-	class p2pchat(threading.Thread):
-		'''
-			mode:
-				0 - Server
-				1 - Client
-		'''
-		def __init__(self,mode,serveraddr,):
+	class serverChat(threading.Thread):
+		
+		def __init__(self,clientSock, addr):
 			threading.Thread.__init__(self)
 			self.addr = addr
 			self.sock = clientSock
-			self.mode = mode
 			self.running = 1
+			self.login = ""
+			
 		def run(self):
+			
+			global client_array
 			#client conn
-			if mode:
+			while self.running:
+				inputready,outputready,exceptready = select.select ([self.sock],[self.sock],[])
+				for input_item in inputready:
+					#get response
+					response = self.sock.recv(_recvbuffer).decode('utf-8')
+					if response:
+						# do action
+						self.response_operation(response)
+					else: break
+				time.sleep(0)
+			
+			self.sock.close()
+			print("Client disconnect")
+			
+		def response_operation(self,_response):
+			global client_array
+			
+			if 'LOGIN' in _response:
+				_res_mas = _response.split(' ')
 				
+				self.login = _res_mas[1]
+				client_array[self.login] = self
+				print('Client ', _res_mas[1] , ' start chat')
+		
+			else:
+				print(self.login,": ", _response)
+		
+		def send(self,_request):
+			self.sock.send(_request.encode('utf-8'))
+	
+	class clientChat(threading.Thread):
+		def __init__(self,server_addr):
+			threading.Thread.__init__(self)
+			self.host = None
+			self.sock = None
+			self.serv_addr = server_addr
+			self.login_server = None
+			
+			self.running = 1
+			
+		def run(self):
+			global login
+		
+		
+			self.sock = socket.socket()
+			self.sock.connect(self.serv_addr)
+			
+			self.sock.send('LOGIN ',login)
+			
+		def response_operation(self,_response):
+			global server_array
+			
+			if 'LOGIN' in _response:
+				_res_mas = _response.split(' ')
 				
+				self.login = _res_mas[1]
+				server_array[self.login] = self
+				print(' ', _res_mas[1] , ' start chat')
+		
+			else:
+				print(self.login,": ", _response)
+		
+		def send(self,_request):
+			self.sock.send(_request.encode('utf-8')) 
+	
 	class listenServer(threading.Thread):
 		def __init__(self):
 			threading.Thread.__init__(self)
@@ -127,7 +193,11 @@ def main():
 			elif 'SESSION' in _response:
 				_res_mas = _response.split(' ')
 				print('User ',_res_mas[1], 'want start chat. Address to connect: ',_res_mas[2])
-			
+				addr,port = _res_mas[2].split(':')
+				serv_adr = str(addr), int(port)
+				client = clientChat(serv_adr)
+				client.start()
+				
 		def send(self,_req):
 			self.sock.send(_req.encode('utf-8'))
 			
@@ -135,7 +205,11 @@ def main():
 			self.send(str('BYE'))
 			self.running = 0
 			
-
+	'''
+					Описание команды CREATE [[ID] [IP:PORT]]
+					Команда создания p2p чата с клиентом ID
+					Открывается порт для старта соединения
+	'''
 	class Text_Input(threading.Thread):
 		def __init__(self):
 			threading.Thread.__init__(self)
@@ -149,10 +223,22 @@ def main():
 				elif 'LIST' in text:
 					req_str = str(text)
 					talkToServer.send(req_str)
-		
+	
+				
 				elif 'CREATE' in text:
+					text = text + " "+str(_yourself_ip) + ":"+ str(_serverChat_port)
 					req_str = str(text)
 					talkToServer.send(req_str)
+					
+				elif 'CHAT' in text:
+					req_str = text.split(':')
+					login_c = req_str[1]
+					req_str = req_str[2]
+					
+					if login_c in client_array:
+						client_array[login_c].send(req_str)
+					elif login_c in server_array:
+						server_array[login_c].send(req_str)
 					
 				time.sleep(1)
 		def kill(self):
@@ -171,7 +257,27 @@ def main():
 	talkToServer.send('LOGIN '+str(login))
 	input_message = Text_Input()
 	input_message.start()
+	
+	# start server chat
+	chat_sock = socket.socket()
+	chat_sock.bind(_address_bind)
+	chat_sock.listen(_maxconnect)
+	# for first start
+	count_thread = 1
+	#dictonary threads -> ip:thread
+	client_array = {}
+	while count_thread >= 1:
 		
+		# create new connection
+		conn, addr = chat_sock.accept()
+		print("START NEW CHAT with ", str(addr))
+		
+		#client_array[addr[0]] = talkToClient(conn,addr).start()
+		serverChat(conn,addr).start()
+		serverChat.send("LOGIN ",login)
+		
+		#get current count threads
+		count_thread = threading.active_count()
 	
 	
 	'''

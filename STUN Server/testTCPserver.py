@@ -9,7 +9,7 @@ import sqlite3
 import select
 
 #server address
-_server_ip = "10.0.0.108"
+_server_ip = "192.168.43.65"
 #server port
 _server_port = 5544
 #address for bind port
@@ -69,8 +69,8 @@ class talkToClient(threading.Thread):
 				COMMAND LIST:
 					desription: get list ip users
 					action: send list ip users
-				COMMAND CREATE [[IP] [IP:PORT]]:
-					IP - IP client with whom want to start session
+				COMMAND CREATE [[ID_client] [IP:PORT]]:
+					ID_client - ID client with whom want to start session
 					IP:PORT - Client's IP who wants to start the session
 					desription: start session with client IP
 					action: send message client with IP, about other client want start session 
