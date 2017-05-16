@@ -7,20 +7,22 @@ import socket
 import threading
 import select
 
-_server_ip = "192.168.43.65"
+_server_ip = "192.168.1.5"
 _server_port = 5544
 _address_server = _server_ip, _server_port
 
 _recvbuffer = 1024
 
-_yourself_ip = "192.168.43.65"
+_yourself_ip = "192.168.1.5"
 _serverChat_port = int(random.uniform(5545,5550))
 _address_bind = _yourself_ip,_serverChat_port
 _maxconnect = 2
 
 global talkToServer
 global serverChat
-
+global login
+global server_array
+global client_array
 '''
 class sendServer(threading.Thread):
 	def __init__(self):
@@ -82,19 +84,25 @@ class Text_Input(threading.Thread):
 '''
 
 def main():
-
+	global login
+	global server_array
+	global client_array
+	
 	class serverChat(threading.Thread):
 		
-		def __init__(self,clientSock, addr):
+		def __init__(self,clientSock, addr,login):
 			threading.Thread.__init__(self)
 			self.addr = addr
 			self.sock = clientSock
 			self.running = 1
+			self.y_login = login
 			self.login = ""
 			
 		def run(self):
-			
+			global server_array
 			global client_array
+			
+			self.send('LOGIN '+str(self.y_login))
 			#client conn
 			while self.running:
 				inputready,outputready,exceptready = select.select ([self.sock],[self.sock],[])
@@ -111,7 +119,6 @@ def main():
 			print("Client disconnect")
 			
 		def response_operation(self,_response):
-			global client_array
 			
 			if 'LOGIN' in _response:
 				_res_mas = _response.split(' ')
@@ -119,44 +126,57 @@ def main():
 				self.login = _res_mas[1]
 				client_array[self.login] = self
 				print('Client ', _res_mas[1] , ' start chat')
+				print('\nServer connection ',client_array)
 		
 			else:
-				print(self.login,": ", _response)
+				print("\n",self.login,": ", _response,"\n")
 		
 		def send(self,_request):
 			self.sock.send(_request.encode('utf-8'))
 	
 	class clientChat(threading.Thread):
-		def __init__(self,server_addr):
+		def __init__(self,server_addr,login):
 			threading.Thread.__init__(self)
 			self.host = None
 			self.sock = None
 			self.serv_addr = server_addr
 			self.login_server = None
-			
+			self.y_login = login
 			self.running = 1
 			
 		def run(self):
-			global login
-		
-		
+			global server_array
+			global client_array
+				
 			self.sock = socket.socket()
 			self.sock.connect(self.serv_addr)
+			self.send('LOGIN '+str(self.y_login))
 			
-			self.sock.send('LOGIN ',login)
+			while self.running:
+				inputready,outputready,exceptready = select.select ([self.sock],[self.sock],[])
+				for input_item in inputready:
+					#get response
+					response = self.sock.recv(_recvbuffer).decode('utf-8')
+					if response:
+						# do action
+						self.response_operation(response)
+					else: break
+				time.sleep(0)
+			
+			
 			
 		def response_operation(self,_response):
-			global server_array
-			
+						
 			if 'LOGIN' in _response:
 				_res_mas = _response.split(' ')
 				
 				self.login = _res_mas[1]
 				server_array[self.login] = self
 				print(' ', _res_mas[1] , ' start chat')
+				print('\nClient connection ',server_array)
 		
 			else:
-				print(self.login,": ", _response)
+				print("\n",self.login,": ", _response,"\n")
 		
 		def send(self,_request):
 			self.sock.send(_request.encode('utf-8')) 
@@ -168,6 +188,9 @@ def main():
 			self.sock = None
 			self.running = 1
 		def run(self):
+		
+			global login
+			
 			self.sock = socket.socket()
 			self.sock.connect(_address_server)
 			
@@ -195,7 +218,7 @@ def main():
 				print('User ',_res_mas[1], 'want start chat. Address to connect: ',_res_mas[2])
 				addr,port = _res_mas[2].split(':')
 				serv_adr = str(addr), int(port)
-				client = clientChat(serv_adr)
+				client = clientChat(serv_adr,login)
 				client.start()
 				
 		def send(self,_req):
@@ -266,6 +289,7 @@ def main():
 	count_thread = 1
 	#dictonary threads -> ip:thread
 	client_array = {}
+	server_array = {}
 	while count_thread >= 1:
 		
 		# create new connection
@@ -273,8 +297,7 @@ def main():
 		print("START NEW CHAT with ", str(addr))
 		
 		#client_array[addr[0]] = talkToClient(conn,addr).start()
-		serverChat(conn,addr).start()
-		serverChat.send("LOGIN ",login)
+		serverChat(conn,addr,login).start()
 		
 		#get current count threads
 		count_thread = threading.active_count()

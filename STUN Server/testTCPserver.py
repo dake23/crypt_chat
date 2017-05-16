@@ -9,7 +9,7 @@ import sqlite3
 import select
 
 #server address
-_server_ip = "192.168.43.65"
+_server_ip = "192.168.1.5"
 #server port
 _server_port = 5544
 #address for bind port
