@@ -7,6 +7,10 @@ import socket
 import threading
 import sqlite3
 import select
+from Crypto.Cipher import AES
+from Crypto import Random
+
+
 
 #server address
 _server_ip = "192.168.1.5"
@@ -19,13 +23,9 @@ _recvbuffer = 1024
 _maxconnect = 1024
 
 
-'''
-# Set DB options and create tables
-#connection on database
-connDB = sqlite3.connect('chatDB')
-#create cursor
-cur = connDB.cursor()
 
+
+'''
 # --- Create tables ---
 
 # create table users
@@ -46,17 +46,82 @@ class talkToClient(threading.Thread):
 		self.addr = addr
 		self.running = 1
 		self.login = ""
+		self.iv = ""
+		self.key = ""
 		threading.Thread.__init__(self)
 		
 	def run(self):
+	
+		global K,K1
+		#connection on database
+		connDB = sqlite3.connect('serverDB.db')
+		#create cursor
+		cur = connDB.cursor()
+		
+		
+#--------------- start auth client -----
+		
+#--------step 1 - get from client your username
+		response = self.sock.recv(_recvbuffer).decode('utf-8')
+		
+		if 'LOGIN' in response:
+			_res_mas = response.split(' ')
+			
+			self.login = _res_mas[1]
+			
+			thread_array[self.login] = self
+			print('Client ', _res_mas[1] , ' want auth in system')
+			
+		else: self.kill()
+		
+		#get key from DB
+		cur.execute('select key from users where login == ?',(self.login,))
+		resp_db = cur.fetchone()
+		if resp_db == None:
+			print('Error: Not find user ',self.login)
+			self.kill()
+		else:
+			self.key = resp_db[0]
+			#print(key)		#ПОТОМ УБРАТЬ !!!!!
+			self.key += self.key
+		
+		
+#--------step 2 - generate rB and send servename;rB
+		rB = int(random.uniform(222222,99999999))
+		servername = 'pestserver'
+		
+		self.sock.send(';'.join([servername,str(rB)]).encode('utf-8'))
+		
+#--------step 3 - get IV from client and get cipher string servername_rB_rA
+		
+		self.iv = self.sock.recv(_recvbuffer)
+		response = self.sock.recv(_recvbuffer)
+		_servn,_rB,rA = decrypt(response,self.iv,self.key).decode('utf-8').split('_')
+		print("sn = ",_servn,'\n_rB = ',_rB,'\nrB = ',rB,'\nrA = ',rA)
+		
+	
+#--------step 4 - if auth success send cipher string username_rA
+		if int(_rB) == int(rB):
+			print('Client ',self.login, ' auth success')
+			plain_text = self.login+"_"+rA
+			cipher_text = encrypt(plain_text,self.iv,self.key)
+			self.sock.send(cipher_text)
+		else: 
+			print('Client ',self.login,'not auth')
+			self.kill()
+		
+#---------END AUTH ------------
+			
+		self.send("KEYS:"+str(K)+":"+str(K1))
+		
 		while self.running:
 			inputready,outputready,exceptready = select.select ([self.sock],[self.sock],[])
 			for input_item in inputready:
 				#get response
-				response = self.sock.recv(_recvbuffer).decode('utf-8')
+				response = self.sock.recv(_recvbuffer)#.decode('utf-8')
 				if response:
 					# do action
-					self.response_operation(response)
+					self.response_operation(decrypt(response,self.iv,self.key).decode('utf-8'))
 				else: break
 			time.sleep(0)
 			
@@ -80,6 +145,7 @@ class talkToClient(threading.Thread):
 		'''
 		
 		global thread_array
+		
 		
 		if 'LOGIN' in _response:
 			_res_mas = _response.split(' ')
@@ -118,12 +184,27 @@ class talkToClient(threading.Thread):
 			self.kill()
 	
 	def send(self,_request):
-		self.sock.send(_request.encode('utf-8'))
+		self.sock.send(encrypt(_request,self.iv,self.key))#.encode('utf-8'))
 		print('Send to ',self.login, _request)
 		
 	def kill(self):
 		self.running = 0
 
+		
+		
+class Text_Input(threading.Thread):
+	def __init__(self):
+		threading.Thread.__init__(self)
+		self.running = 1
+	def run(self):
+		while self.running == True:
+			text = input('INPUT COMMAND: ')
+			if 'exit' in text or 'Exit' in text:
+				self.kill()
+			
+	
+			
+			time.sleep(1)
 		'''	
 class sendToClient(threading.Thread):
 	def __init__(self,clientSock, addr):
@@ -134,7 +215,26 @@ class sendToClient(threading.Thread):
 		
 	def run(self):
 '''		
-global thread_array	
+global thread_array
+global MODE
+global K
+global K1
+
+K = int(random.uniform(10000000,90000000))
+K1 = int(random.uniform(10000000,90000000))
+
+MODE = AES.MODE_CFB
+def encrypt(text,IV,KEY):
+	c_obj = AES.new(KEY,MODE,IV)
+	cipher_text = c_obj.encrypt(text)
+	return cipher_text
+def decrypt(cipher_text,IV,KEY):
+	c_obj = AES.new(KEY,MODE,IV)
+	text = c_obj.decrypt(cipher_text)
+	return text
+def get_IV():
+	IV = Random.new().read(AES.block_size)
+	return IV
 	
 def main():
 	
